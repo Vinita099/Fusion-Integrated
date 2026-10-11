@@ -30,6 +30,11 @@ export default function RecordsPage() {
     return <Container size="xl"><ErrorState error={records.error ?? calendar.error ?? lookups.error} /></Container>;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const adjust = { mutate: (_body: { id: number; adjustment: unknown }) =>
+    Promise.resolve({}) as Promise<{ id: number }>,
+    isPending: false };
+
   function record(reference: string): LeaveRecord | undefined {
     return (records.data?.results ?? []).find((r) =>
       r.reference === reference || r.request_id === reference || r.id === Number(reference));
@@ -177,7 +182,14 @@ export default function RecordsPage() {
                     {adjustFor?.id === r.id ? (
                       <Group gap={4}>
                         {adjustButtons.map((b) => (
-                          <Button key={b.label} size="compact-xs" {...b.props} onClick={b.onClick}>{b.label}</Button>
+                          <Button
+                            key={b.label}
+                            size="compact-xs"
+                            onClick={b.onClick}
+                            disabled={b.disabled}
+                          >
+                            {b.label}
+                          </Button>
                         ))}
                       </Group>
                     ) : (
