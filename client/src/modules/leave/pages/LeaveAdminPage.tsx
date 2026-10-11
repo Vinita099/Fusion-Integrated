@@ -1,14 +1,11 @@
 import { useState } from "react";
-import { Card, Container, Group, Stack, Tabs, Text } from "@mantine/core";
-import { notifications } from "@mantine/notifications";
-import { FaClipboardList, FaFileSignature, FaHistory, FaTool } from "react-icons/fa";
+import { Button, Card, Container, Group, Stack, Tabs, Text } from "@mantine/core";
+import { FaClipboardList, FaFileSignature, FaHistory } from "react-icons/fa";
 
-import { errorMessage } from "../../../lib/http";
 import { DataTable } from "../../../ui/components/DataTable";
 import { ErrorState } from "../../../ui/components/ErrorState";
 import { PageHeader } from "../../../ui/components/PageHeader";
 import { useLeaveConfig, useLeaveHierarchy, useLeaveSla } from "../api/hooks";
-import type { LeaveConfig, Hierarchy } from "../api/types";
 
 export default function LeaveAdminPage() {
   const config = useLeaveConfig();
@@ -22,35 +19,21 @@ export default function LeaveAdminPage() {
     } /></Container>;
   }
 
-  const tabTitle = (tab: "policy" | "hierarchy" | "calendar" | "sla") => {
-    switch (tab) {
-      case "policy": return "Policy";
-      case "hierarchy": return "Department hierarchy";
-      case "calendar": return "Academic calendar";
-      case "sla": return "SLA windows";
-      default: return "Policy";
-    }
-  };
-
   const tabSection = (tab: "policy" | "hierarchy" | "calendar" | "sla") => {
     switch (tab) {
       case "policy": {
         const c = config.data ?? { periods: [], categories: [] };
-        return <DataTable<{ key: string; label: string }>
+        return <DataTable<{ key: string; label: string; value: string }>
           rows={[
-            { key: "policy_version", label: "Policy version", value: c.policy_version ?? "—" },
-            { key: "start_date", label: "Academic year start", value: c.start_date ?? "—" },
-            { key: "end_date", label: "Academic year end", value: c.end_date ?? "—" },
-            { key: "lookback_days", label: "Lookback days", value: c.lookback_days ?? "—" },
-            { key: "clockwork_days", label: "Clockwork cut-off", value: c.clockwork_days ?? "—" },
-            { key: "categories", label: "Categories",
-              value: (c.categories ?? []).map((x) => x).join(", ") },
-            { key: "period_types", label: "Period types",
-              value: (c.periods ?? []).map((x) => x).join(", ") },
+            { key: "policy_version", label: "Policy version", value: c.periods.map((p) => p.name).join(", ") },
+            { key: "start_date", label: "Academic year start", value: c.periods.map((p) => p.period_from).join(", ") },
+            { key: "end_date", label: "Academic year end", value: c.periods.map((p) => p.period_to).join(", ") },
+            { key: "categories", label: "Categories", value: c.categories.join(", ") },
           ]}
           loading={config.isPending}
           rowKey={(r) => r.key}
           minWidth={400}
+          empty={{ icon: FaClipboardList, title: "No configuration yet", description: "Configure the leave module policies here." }}
           columns={[
             { key: "label", header: "Setting", render: (r) => <Text fw={600}>{r.label}</Text> },
             { key: "value", header: "Value", render: (r) => <Text size="sm">{r.value}</Text> },
@@ -58,19 +41,17 @@ export default function LeaveAdminPage() {
         />;
       }
       case "hierarchy": {
-        const h = hierarchy.data ?? { departments: [], posts: [] };
-        return <DataTable<{ key: string; label: string }>
+        const h = hierarchy.data ?? { departments: [], posts: [], committee: [] };
+        return <DataTable<{ key: string; label: string; value: string }>
           rows={[
-            { key: "departments", label: "Departments",
-              value: h.departments.map((d) => `${d.code} → ${d.manages_of} managers`).join(", ") },
-            { key: "posting_types", label: "Posting types",
-              value: (h.posts ?? []).map((p) => p).join(", ") },
-            { key: "committee", label: "Leave committee",
-              value: (h.committee ?? []).map((c) => c).join(", ") },
+            { key: "departments", label: "Departments", value: h.departments.map((d) => `${d.code} → ${d.manages_of} managers`).join(", ") },
+            { key: "posting_types", label: "Posting types", value: h.posts.join(", ") },
+            { key: "committee", label: "Leave committee", value: h.committee.join(", ") },
           ]}
           loading={hierarchy.isPending}
           rowKey={(r) => r.key}
           minWidth={400}
+          empty={{ icon: FaHistory, title: "No hierarchy yet", description: "Configure the leave module hierarchy here." }}
           columns={[
             { key: "label", header: "Setting", render: (r) => <Text fw={600}>{r.label}</Text> },
             { key: "value", header: "Value", render: (r) => <Text size="sm">{r.value}</Text> },
@@ -86,6 +67,7 @@ export default function LeaveAdminPage() {
           loading={config.isPending}
           rowKey={(r) => r.from}
           minWidth={500}
+          empty={{ icon: FaClipboardList, title: "No calendar yet", description: "Add academic calendar periods for the leave module." }}
           columns={[
             { key: "name", header: "Period", render: (r) => <Text size="sm">{r.name}</Text> },
             { key: "from", header: "From", render: (r) => r.from },
@@ -95,19 +77,19 @@ export default function LeaveAdminPage() {
         />;
       }
       case "sla": {
-        const s = sla.data ?? { targets: [], brokers: [] };
-        return <DataTable<{ key: string; label: string }>
+        const s = sla.data ?? { targets: [], remind_before: "", escalate_after: "", breach_days: "", lock_after: "" };
+        return <DataTable<{ key: string; label: string; value: string }>
           rows={[
-            { key: "targets", label: "Targets",
-              value: (s.targets ?? []).map((t) => t).join(", ") },
-            { key: "remind_before", label: "Remind before", value: s.remind_before ?? "—" },
-            { key: "escalate_after", label: "Escalate after", value: s.escalate_after ?? "—" },
-            { key: "breach_days", label: "Breach days", value: s.breach_days ?? "—" },
-            { key: "lock_after", label: "Lock after", value: s.lock_after ?? "—" },
+            { key: "targets", label: "Targets", value: s.targets.join(", ") },
+            { key: "remind_before", label: "Remind before", value: s.remind_before },
+            { key: "escalate_after", label: "Escalate after", value: s.escalate_after },
+            { key: "breach_days", label: "Breach days", value: s.breach_days },
+            { key: "lock_after", label: "Lock after", value: s.lock_after },
           ]}
           loading={sla.isPending}
           rowKey={(r) => r.key}
           minWidth={400}
+          empty={{ icon: FaTool, title: "No SLA thresholds yet", description: "Configure leave request SLA windows here." }}
           columns={[
             { key: "label", header: "Setting", render: (r) => <Text fw={600}>{r.label}</Text> },
             { key: "value", header: "Value", render: (r) => <Text size="sm">{r.value}</Text> },
@@ -135,12 +117,12 @@ export default function LeaveAdminPage() {
           <Text fw={600}>Configuration</Text>
           <Text size="sm" c="dimmed">Administer the leave module</Text>
         </Stack>
-        <Tabs value={tab} onChange={setTab}>
+        <Tabs value={tab} onChange={(v) => setTab(v as never)}>
           <Tabs.List>
             <Tabs.Tab value="policy" leftSection={<FaFileSignature size={12} />}>Policy</Tabs.Tab>
             <Tabs.Tab value="hierarchy" leftSection={<FaHistory size={12} />}>Hierarchy</Tabs.Tab>
             <Tabs.Tab value="calendar" leftSection={<FaClipboardList size={12} />}>Calendar</Tabs.Tab>
-            <Tabs.Tab value="sla" leftSection={<FaTool size={12} />}>SLA</Tabs.Tab>
+            <Tabs.Tab value="sla" leftSection={<FaFileSignature size={12} />}>SLA</Tabs.Tab>
           </Tabs.List>
         </Tabs>
       </Group>

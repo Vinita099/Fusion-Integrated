@@ -96,7 +96,7 @@ export interface LedgerEntry {
   at: string;
 }
 
-export interface SubstituteAssignment {
+export interface SubstitutionAssignment {
   id: number;
   request_id: number;
   reference: string | null;
@@ -202,6 +202,25 @@ export interface HierarchyRule {
   is_active: boolean;
 }
 
+export interface LeaveConfig {
+  periods?: { name: string; period_from: string; period_to: string; note?: string }[];
+  categories?: string[];
+}
+
+export interface Hierarchy {
+  departments?: { code: string; manages_of: string }[];
+  posts?: string[];
+  committee?: string[];
+}
+
+export interface SlaConfig {
+  targets?: string[];
+  remind_before: string;
+  escalate_after: string;
+  breach_days: string;
+  lock_after: string;
+}
+
 export const CATEGORY_LABELS: Record<LeaveCategory, string> = {
   cl: "Casual Leave",
   rh: "Restricted Holiday",
@@ -210,3 +229,11 @@ export const CATEGORY_LABELS: Record<LeaveCategory, string> = {
   col: "Commuted Leave",
   vl: "Vacation Leave",
 };
+
+export interface Adjustment {
+  label: string;
+  category: string;
+  period_from: string;
+  period_to: string;
+  days_taken: string;
+}

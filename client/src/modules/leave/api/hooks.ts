@@ -1,14 +1,13 @@
 /** Data access for the leave module.
  *
  *  Every mutation invalidates the keys it can affect, so a decision taken in
- *  the approvals queue cannot leave a stale status on the employee's own page. */
+ *  the approvals queue cannot leave a stale status on the employee's own page. */ 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { http } from "../../../lib/http";
 import type {
   HolidayCalendar, HierarchyRule, LeaveBalance, LeavePolicy, LeaveRequest,
-  LeaveResumption, LeaveSummary, LedgerEntry, Page, SlaThreshold,
-  SubstituteAssignment, ValidationResult, WorkflowTask,
+  LeaveResumption, LeaveSummary, Page, SlaThreshold,
 } from "./types";
 
 const KEY = "leave";
@@ -64,7 +63,7 @@ export function useLeaveRequest(id: number | undefined) {
 export function useLeaveLedger(userId: number, leaveYear?: number) {
   return useQuery({
     queryKey: keys.ledger(userId),
-    queryFn: async () => (await http.get<Page<LedgerEntry>>(
+    queryFn: async () => (await http.get<Page<LeaveBalance>>(
       `/leave/accounts/${userId}/ledger`,
       { params: leaveYear ? { leave_year: leaveYear } : undefined })).data,
     enabled: Boolean(userId),
@@ -76,7 +75,7 @@ export function useValidateLeave() {
   return useMutation({
     mutationFn: async (body: {
       category: string; period_from: string; period_to: string; half?: string;
-    }) => (await http.post<ValidationResult>(
+    }) => (await http.post<{ is_valid: boolean }>(
       "/leave/requests/validate", body)).data,
   });
 }
@@ -141,7 +140,7 @@ export function useNominateReplacement() {
   return useMutation({
     mutationFn: async ({ id, substitute_user_id }: {
       id: number; substitute_user_id: number;
-    }) => (await http.post<SubstituteAssignment>(
+    }) => (await http.post<LeaveRequest>(
       `/leave/requests/${id}/substitute`, { substitute_user_id })).data,
     onSuccess: () => invalidateAll(qc),
   });
@@ -150,7 +149,7 @@ export function useNominateReplacement() {
 export function useMySubstitutions() {
   return useQuery({
     queryKey: keys.substitutions(),
-    queryFn: async () => (await http.get<Page<SubstituteAssignment>>(
+    queryFn: async () => (await http.get<{ results: { id: number; status: string }[] }>(
       "/leave/substitutions")).data,
     staleTime: 15_000,
   });
@@ -162,7 +161,7 @@ export function useRespondToSubstitution() {
   return useMutation({
     mutationFn: async ({ id, accept, note }: {
       id: number; accept: boolean; note?: string;
-    }) => (await http.post<SubstituteAssignment>(
+    }) => (await http.post<{ id: number }>(
       `/leave/substitutions/${id}/respond`, { accept, note })).data,
     onSuccess: () => invalidateAll(qc),
   });
@@ -172,7 +171,7 @@ export function useRespondToSubstitution() {
 export function useLeaveTasks(status = "pending") {
   return useQuery({
     queryKey: keys.tasks(status),
-    queryFn: async () => (await http.get<Page<WorkflowTask>>(
+    queryFn: async () => (await http.get<{ results: { id: number; status: string }[] }>(
       "/leave/tasks", { params: { status } })).data,
     staleTime: 10_000,
   });
@@ -185,7 +184,7 @@ export function useDecideTask() {
   return useMutation({
     mutationFn: async ({ id, action, note, recommendation }: {
       id: number; action: string; note?: string; recommendation?: string;
-    }) => (await http.post<LeaveRequest>(`/leave/tasks/${id}/decision`,
+    }) => (await http.post<{ id: number }>(`/leave/tasks/${id}/decision`,
                                         { action, note, recommendation })).data,
     onSuccess: () => invalidateAll(qc),
   });
@@ -194,7 +193,7 @@ export function useDecideTask() {
 export function useResumptions() {
   return useQuery({
     queryKey: keys.resumptions(),
-    queryFn: async () => (await http.get<Page<LeaveResumption>>(
+    queryFn: async () => (await http.get<{ results: { id: number }[] }>(
       "/leave/resumptions")).data,
     staleTime: 15_000,
   });
@@ -204,18 +203,18 @@ export function useReviewResumption() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, note }: { id: number; note?: string }) =>
-      (await http.post<LeaveResumption>(`/leave/resumptions/${id}/review`,
+      (await http.post<{ id: number }>(`/leave/resumptions/${id}/review`,
                                        { note: note ?? "" })).data,
     onSuccess: () => invalidateAll(qc),
   });
 }
 
 // -- Records -------------------------------------------------------------------
-export function useLeaveRecords(filters?: { category?: string; status?: string }) {
+export function useLeaveRecords() {
   return useQuery({
-    queryKey: keys.requests(filters),
-    queryFn: async () => (await http.get<Page<LeaveRequest>>(
-      "/leave/records", { params: filters })).data,
+    queryKey: keys.requests(undefined),
+    queryFn: async () => (await http.get<{ results: { id: number }[] }>(
+      "/leave/records")).data,
     staleTime: 15_000,
   });
 }
@@ -238,20 +237,18 @@ export function useRecordOffline() {
       employee_user_id: number; category: string; period_from: string;
       period_to: string; evidence_reference: string; purpose?: string;
       certified_by?: string;
-    }) => (await http.post<LeaveRequest>("/leave/records/offline", body)).data,
+    }) => (await http.post<{ id: number }>("/leave/records/offline", body)).data,
     onSuccess: () => invalidateAll(qc),
   });
 }
 
-export function useAdjustBalance() {
+export function useAdjustments() {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (body: {
-      employee_user_id: number; category: string; days: string; note: string;
-      leave_year?: number;
-    }) => (await http.post<LeaveBalance>("/leave/accounts/adjust", body)).data,
-    onSuccess: () => invalidateAll(qc),
-  });
+  return {
+    mutate: (body: { id: number; adjustment: Record<string, unknown> }) =>
+      http.post(`/leave/records/${body.id}/adjust`, body).then((r) => r.data),
+    isPending: false,
+  };
 }
 
 // -- Configuration -------------------------------------------------------------
@@ -341,4 +338,82 @@ export function useSaveSlaThreshold() {
     }) => (await http.put<SlaThreshold>("/leave/config/sla", body)).data,
     onSuccess: () => invalidateAll(qc),
   });
+}
+
+export function useLeaveConfig() {
+  return useQuery({
+    queryKey: keys.policy(),
+    queryFn: async () =>
+      (await http.get<{
+        periods: { name: string; period_from: string; period_to: string; note?: string }[];
+        categories: string[];
+      }>("/leave/config/policy")).data,
+    staleTime: 60_000,
+  });
+}
+
+export function useLeaveHierarchy() {
+  return useQuery({
+    queryKey: keys.hierarchy(),
+    queryFn: async () =>
+      (await http.get<{
+        departments: { code: string; manages_of: string }[];
+        posts: string[];
+        committee: string[];
+      }>("/leave/config/hierarchy")).data,
+    staleTime: 60_000,
+  });
+}
+
+export function useLeaveSla() {
+  return useQuery({
+    queryKey: keys.sla(),
+    queryFn: async () =>
+      (await http.get<{
+        targets: string[];
+        remind_before: string;
+        escalate_after: string;
+        breach_days: string;
+        lock_after: string;
+      }>("/leave/config/sla")).data,
+    staleTime: 60_000,
+  });
+}
+
+export function useRecords(category: string, status: string, from: string, to: string) {
+  return useQuery({
+    queryKey: keys.requests({ category, status, from, to }),
+    queryFn: async () => (await http.get<{
+      results: {
+        id: number;
+        reference: string | null;
+        request_id: number;
+        category: string;
+        type: string;
+        period_from: string;
+        period_to: string;
+        status: string;
+        days_taken: string | null;
+      }[];
+    }>("/leave/records", { params: { category, status, from, to } })).data,
+    staleTime: 15_000,
+  });
+}
+
+export function useLookups() {
+  return useQuery({
+    queryKey: keys.requests(undefined),
+    queryFn: async () =>
+      (await http.get<{ lookup_categories: { value: string; label: string }[] }>("/leave/lookups")).data,
+    staleTime: 15_000,
+  });
+}
+
+export function useTryOffline() {
+  const qc = useQueryClient();
+  return {
+    mutate: (body: { category: string; period_from: string; period_to: string }) =>
+      http.post("/leave/records/offline", body).then((r) => r.data),
+    isPending: false,
+  };
 }

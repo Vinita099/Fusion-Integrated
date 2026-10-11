@@ -157,11 +157,7 @@ export default function ApprovalsPage() {
                   ),
                 },
               ]}
-              empty={{
-                icon: FaCheckDouble,
-                title: "Nothing in your queue",
-                description: "Requests routed to your office appear here.",
-              }}
+              empty={{ icon: FaCheckDouble, title: "Nothing in your queue", description: "Requests routed to your office appear here." }}
             />
           </Card>
         </Tabs.Panel>
@@ -191,11 +187,7 @@ export default function ApprovalsPage() {
                   ) : null,
                 },
               ]}
-              empty={{
-                icon: FaClipboardList,
-                title: "No resumption submissions",
-                description: "Employees returning from EL, COL or VL submit here.",
-              }}
+              empty={{ icon: FaClipboardList, title: "No resumption submissions", description: "Employees returning from EL, COL or VL submit here." }}
             />
           </Card>
         </Tabs.Panel>

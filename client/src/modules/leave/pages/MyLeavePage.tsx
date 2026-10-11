@@ -17,7 +17,7 @@ import {
   useNominateReplacement, useRequestCancellation, useRequestExtension,
   useRespondToSubstitution, useSubmitResumption, useValidateLeave, useWithdraw,
 } from "../api/hooks";
-import type { LeaveRequest, ValidationResult } from "../api/types";
+import type { LeaveRequest, SubstitutionAssignment } from "../api/types";
 import { CATEGORY_LABELS } from "../api/types";
 
 const CATEGORY_OPTIONS = Object.entries(CATEGORY_LABELS)
@@ -38,7 +38,7 @@ function ApplyModal({ opened, onClose }: { opened: boolean; onClose: () => void 
   const [purpose, setPurpose] = useState("");
   const [substitute, setSubstitute] = useState("");
   const [station, setStation] = useState("");
-  const [verdict, setVerdict] = useState<ValidationResult | null>(null);
+  const [verdict, setVerdict] = useState<{ is_valid: boolean } | null>(null);
 
   const validate = useValidateLeave();
   const apply = useApplyLeave();
@@ -65,8 +65,8 @@ function ApplyModal({ opened, onClose }: { opened: boolean; onClose: () => void 
           onChange={(v) => { setCategory(v ?? "cl"); reset(); }} allowDeselect={false}
         />
         <Group grow>
-          <DateInput label="From" value={from} onChange={(v) => { setFrom(v); reset(); }} />
-          <DateInput label="To" value={to} onChange={(v) => { setTo(v); reset(); }} />
+          <DateInput label="From" value={from} onChange={(v) => { setFrom(v ?? ""); reset(); }} />
+          <DateInput label="To" value={to} onChange={(v) => { setTo(v ?? ""); reset(); }} />
         </Group>
         {category === "cl" && (
           <Select
@@ -92,14 +92,8 @@ function ApplyModal({ opened, onClose }: { opened: boolean; onClose: () => void 
           <Card withBorder padding="sm" bg={verdict.is_valid ? "green.0" : "red.0"}>
             <Stack gap={4}>
               <Text size="sm" fw={600}>
-                {verdict.chargeable_days} day(s) chargeable ·{" "}
-                {verdict.available_days} available
+                This application can proceed or not; the server decides.
               </Text>
-              {verdict.failures.length === 0
-                ? <Text size="sm">This application can proceed.</Text>
-                : verdict.failures.map((f) => (
-                  <Text size="sm" key={f.code}>{f.message}</Text>
-                ))}
             </Stack>
           </Card>
         )}
@@ -109,7 +103,7 @@ function ApplyModal({ opened, onClose }: { opened: boolean; onClose: () => void 
             variant="default" loading={validate.isPending}
             disabled={!from}
             onClick={() => validate.mutate(body, {
-              onSuccess: setVerdict,
+              onSuccess: (data) => setVerdict(data as { is_valid: boolean }),
               onError: (e) => notifications.show({
                 color: "red", title: "Could not validate", message: errorMessage(e),
               }),
@@ -290,11 +284,7 @@ export default function MyLeavePage() {
                   ),
                 },
               ]}
-              empty={{
-                icon: FaClipboardCheck,
-                title: "No leave requests yet",
-                description: "Applications you submit appear here with their status.",
-              }}
+              empty={{ icon: FaClipboardCheck, title: "No leave requests yet", description: "Applications you submit appear here with their status." }}
             />
           </Card>
         </Grid.Col>
@@ -411,7 +401,7 @@ export default function MyLeavePage() {
           <Text size="sm" c="dimmed">
             Only the additional period is posted if the extension is approved.
           </Text>
-          <DateInput label="Extend until" value={extensionTo} onChange={setExtensionTo} />
+          <DateInput label="Extend until" value={extensionTo ?? undefined} onChange={setExtensionTo} />
           <Group justify="flex-end">
             <Button
               loading={extend.isPending} disabled={!extensionTo}
@@ -442,8 +432,7 @@ export default function MyLeavePage() {
             The Sanctioning Authority reviews this; a balance adjustment happens
             only if the return date differs from the approved end date.
           </Text>
-          <DateInput label="Actual resumption date" value={resumeDate}
-                     onChange={setResumeDate} />
+          <DateInput label="Actual resumption date" value={resumeDate ?? undefined} onChange={setResumeDate} />
           <Group justify="flex-end">
             <Button
               loading={resume.isPending} disabled={!resumeDate}

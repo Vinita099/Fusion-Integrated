@@ -1,18 +1,16 @@
 import { useState } from "react";
-import { Button, Card, Container, Group, Stack, Tabs, Text } from "@mantine/core";
-import { notifications } from "@mantine/notifications";
-import { FaCalendarAlt, FaFileCircle, FaLock, FaTicketAlt } from "react-icons/fa";
+import { Button, Card, Container, Group, Stack, Text } from "@mantine/core";
+import { FaCalendarAlt, FaClipboardList } from "react-icons/fa";
 
-import { errorMessage } from "../../../lib/http";
 import { DataTable } from "../../../ui/components/DataTable";
 import { ErrorState } from "../../../ui/components/ErrorState";
 import { PageHeader } from "../../../ui/components/PageHeader";
 import { StatusBadge } from "../../../ui/components/StatusBadge";
 import {
-  useAdjustments, useLeaveCalendar, useLookups, useRecords, useTryOffline,
+  useLeaveCalendar, useLookups, useRecords, useTryOffline,
 } from "../api/hooks";
-import type { Adjustment, LeaveCalendar, Lookup, LeaveRecord } from "../api/types";
-import { CATEGORY_LABELS, LEAVE_TYPES } from "../api/types";
+import type { LeaveCalendar, LeaveRecord } from "../api/types";
+import { CATEGORY_LABELS } from "../api/types";
 
 const CAL_MONTHS = 6;
 
@@ -21,15 +19,12 @@ export default function RecordsPage() {
   const [to, setTo] = useState("2026-06-30");
   const [category, setCategory] = useState("cl");
   const [status, setStatus] = useState("active");
-  const [value, setValue] = useState<number | null>(null);
   const [adjustFor, setAdjustFor] = useState<LeaveRecord | null>(null);
-  const [adjustNote, setAdjustNote] = useState("");
 
-  const records = useRecords(category, status, from, to, null);
+  const records = useRecords(category, status, from, to);
   const calendar = useLeaveCalendar(from, to);
   const lookups = useLookups();
   const offline = useTryOffline();
-  const adjust = useAdjustments();
 
   if (records.error || calendar.error || lookups.error) {
     return <Container size="xl"><ErrorState error={records.error ?? calendar.error ?? lookups.error} /></Container>;
@@ -47,12 +42,16 @@ export default function RecordsPage() {
     const actual = Number(days) || 0;
     const newActual = Math.round(actual - remainingDays * (1 - pct));
     const newBalance = Math.max(0, Number(balance) - newActual);
-    const adjusted = {
-      category, period_from: from, period_to: to, days_taken: newActual,
-      prorated_end_date: `2026-01-01`, note: `Estimated at ${effort}% workload`,
-      method: "adjustment", proposal: "schedule-adjustment",
-    } as Adjustment;
-    adjust.mutate({ id: record(reference)?.id ?? 0, adjustment: adjusted });
+    adjust.mutate({
+      id: record(reference)?.id ?? 0,
+      adjustment: {
+        label: `Est. ${effort}%`,
+        category,
+        period_from: from,
+        period_to: to,
+        days_taken: newActual.toString(),
+      },
+    });
   }
 
   const adjustButtons = adjustFor
@@ -62,7 +61,6 @@ export default function RecordsPage() {
         { label: "Cancel", onClick: () => setAdjustFor(null) },
       ]
     : [{ label: "Offline balance", onClick: () => offline.mutate({ category, period_from: from, period_to: to }), disabled: offline.isPending }, { label: "Adjust", onClick: () => setAdjustFor(record("REF0001") ?? null) }];
-  const lookupPrefix = (lookups.data?.lookup_categories ?? []).map((c) => c.value).join(" ");
 
   return (
     <Container size="xl">
@@ -110,8 +108,6 @@ export default function RecordsPage() {
                   <option key={s} value={s}>{s}</option>)}
               </select>
             </Stack>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
-                   style={{ width: 140, padding: "4px 6px" }} />
             <Button size="xs" onClick={() => setStatus(status === "active" ? "completed" : "active")}>
               Toggle {status}
             </Button>
@@ -121,7 +117,7 @@ export default function RecordsPage() {
         <Card withBorder padding="lg">
           <Group justify="space-between" align="center">
             <Stack gap={0}>
-              <Text fw={600}>{CALENDAR_TITLE}</Text>
+              <Text fw={600}>Leave calendar</Text>
               <Text size="sm" c="dimmed">Calendar of {from} → {to}</Text>
             </Stack>
             <Button size="xs" variant="light" color="gray">Export</Button>
@@ -136,11 +132,12 @@ export default function RecordsPage() {
                 render: (r) => <Text size="sm">
                   {r.period_from} → {r.period_to}</Text> },
               { key: "category", header: "Category",
-                render: (r) => CATEGORY_LABELS[r.category] ?? r.category },
+                render: (r) => CATEGORY_LABELS[r.category as keyof typeof CATEGORY_LABELS] ?? r.category },
               { key: "balance", header: "Balance",
                 render: (r) => <Text size="sm">{Number(r.balances?.classic || 0) > 0 ? "✅" : "❌"} {r.balances?.classic ?? 0}</Text> },
               { key: "note", header: "Note", render: (r) => r.note },
             ]}
+            empty={{ icon: FaCalendarAlt, title: "No calendar entries", description: "Calendar periods for the leave module." }}
           />
         </Card>
 
@@ -163,9 +160,9 @@ export default function RecordsPage() {
               { key: "reference", header: "Reference",
                 render: (r) => <Text size="sm">{r.reference ?? `#${r.request_id}`}</Text> },
               { key: "category", header: "Category",
-                render: (r) => CATEGORY_LABELS[r.category] ?? r.category },
+                render: (r) => CATEGORY_LABELS[r.category as keyof typeof CATEGORY_LABELS] ?? r.category },
               { key: "type", header: "Type",
-                render: (r) => LEAVE_TYPES[r.type] ?? r.type },
+                render: (r) => r.type },
               {
                 key: "periods", header: "Periods",
                 render: (r) => (
@@ -180,7 +177,7 @@ export default function RecordsPage() {
                     {adjustFor?.id === r.id ? (
                       <Group gap={4}>
                         {adjustButtons.map((b) => (
-                          <Button key={b.label} size="compact-xs" {...b.props}>{b.label}</Button>
+                          <Button key={b.label} size="compact-xs" {...b.props} onClick={b.onClick}>{b.label}</Button>
                         ))}
                       </Group>
                     ) : (
@@ -192,11 +189,10 @@ export default function RecordsPage() {
                 ),
               },
             ]}
+            empty={{ icon: FaClipboardList, title: "No leave records", description: "Every leave submission appears here." }}
           />
         </Card>
       </Stack>
     </Container>
   );
 }
-
-const CALENDAR_TITLE = "Leave calendar";
